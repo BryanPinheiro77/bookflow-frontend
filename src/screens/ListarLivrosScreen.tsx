@@ -1,13 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   Pressable,
   StyleSheet,
   ScrollView,
   ActivityIndicator,
-  TextInput,
-  Alert,
 } from 'react-native';
 import { router } from 'expo-router';
 import { apiFetch, buscarRole } from '../services/api';
@@ -22,17 +21,26 @@ type Livro = {
   disponivel?: boolean;
 };
 
-export default function ListarLivrosScreen() {
+type Interesse = {
+  id?: number;
+  livroId?: number;
+  livro?: {
+    id?: number;
+  };
+};
+
+export default function LivrosScreen() {
   const [livros, setLivros] = useState<Livro[]>([]);
-  const [busca, setBusca] = useState('');
+  const [interessesIds, setInteressesIds] = useState<number[]>([]);
   const [role, setRole] = useState<string | null>(null);
+  const [busca, setBusca] = useState('');
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
 
   const isAdmin = role === 'ADMIN';
   const isUsuario = role === 'USUARIO';
 
-  async function carregarLivros() {
+  async function carregarDados() {
     try {
       setCarregando(true);
       setErro('');
@@ -40,46 +48,80 @@ export default function ListarLivrosScreen() {
       const roleSalva = await buscarRole();
       setRole(roleSalva);
 
-      const data = await apiFetch('/livros');
-      setLivros(data);
-    } catch (error) {
-      setErro('Não foi possível carregar os livros.');
+      const livrosCarregados: Livro[] = await apiFetch('/livros');
+      setLivros(livrosCarregados);
+
+      if (roleSalva === 'USUARIO') {
+        try {
+          const interesses: Interesse[] = await apiFetch('/interesses/meus');
+
+          const ids = interesses
+            .map((interesse) => interesse.livroId || interesse.livro?.id)
+            .filter((id): id is number => typeof id === 'number');
+
+          setInteressesIds(ids);
+        } catch {
+          setInteressesIds([]);
+        }
+      } else {
+        setInteressesIds([]);
+      }
+    } catch {
+      setErro('Não foi possível carregar o acervo.');
     } finally {
       setCarregando(false);
     }
   }
 
-  async function registrarInteresse(livroId: number) {
-  try {
-    await apiFetch(`/interesses/livros/${livroId}`, {
-      method: 'POST',
-    });
+  function livroEstaDisponivel(livro: Livro) {
+    if (typeof livro.disponivel === 'boolean') {
+      return livro.disponivel;
+    }
 
-    Alert.alert('Interesse registrado', 'Você será notificado sobre este livro.');
-  } catch (error) {
-    const mensagem =
-      error instanceof Error
-        ? error.message
-        : 'Não foi possível registrar interesse neste livro.';
+    if (livro.status) {
+      return livro.status.toUpperCase() === 'DISPONIVEL';
+    }
 
-    Alert.alert('Erro', mensagem);
+    return true;
   }
-}
+
+  function livroEstaEmprestado(livro: Livro) {
+    if (livro.status) {
+      return livro.status.toUpperCase() === 'EMPRESTADO';
+    }
+
+    if (typeof livro.disponivel === 'boolean') {
+      return !livro.disponivel;
+    }
+
+    return false;
+  }
+
+  function usuarioTemInteresse(livroId: number) {
+    return interessesIds.includes(livroId);
+  }
+
+  const livrosFiltrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+
+    if (!termo) return livros;
+
+    return livros.filter((livro) => {
+      const titulo = (livro.titulo || livro.nome || '').toLowerCase();
+      const autor = (livro.autor || '').toLowerCase();
+      const categoria = (livro.categoria || '').toLowerCase();
+
+      return (
+        titulo.includes(termo) ||
+        autor.includes(termo) ||
+        categoria.includes(termo)
+      );
+    });
+  }, [busca, livros]);
 
   useEffect(() => {
-    carregarLivros();
+    carregarDados();
   }, []);
-
-  const livrosFiltrados = livros.filter((livro) => {
-    const termo = busca.toLowerCase();
-
-    return (
-      livro.titulo?.toLowerCase().includes(termo) ||
-      livro.nome?.toLowerCase().includes(termo) ||
-      livro.autor?.toLowerCase().includes(termo) ||
-      livro.categoria?.toLowerCase().includes(termo)
-    );
-  });
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.content}>
@@ -89,23 +131,23 @@ export default function ListarLivrosScreen() {
         </Pressable>
 
         <View style={styles.headerCenter}>
-          <Text style={styles.title}>Acervo</Text>
-
-          {role && (
-            <Text style={styles.roleText}>
-              {isAdmin ? 'Administrador' : 'Usuário'}
-            </Text>
-          )}
+          <Text style={styles.headerTitle}>Acervo</Text>
+          <Text style={styles.headerSubtitle}>
+            {isAdmin ? 'Administrador' : 'Usuário'}
+          </Text>
         </View>
 
-        {isAdmin ? (
-          <Pressable onPress={() => router.push('/cadastrar-livro' as any)}>
-            <Text style={styles.addText}>Novo</Text>
-          </Pressable>
-        ) : (
-          <View style={styles.placeholderRight} />
-        )}
+        <View style={styles.placeholderRight} />
       </View>
+
+      {isAdmin && (
+        <Pressable
+          style={styles.createButton}
+          onPress={() => router.push('/cadastrar-livro' as any)}
+        >
+          <Text style={styles.createButtonText}>Cadastrar novo livro</Text>
+        </Pressable>
+      )}
 
       <TextInput
         style={styles.searchInput}
@@ -126,7 +168,7 @@ export default function ListarLivrosScreen() {
         <View style={styles.errorBox}>
           <Text style={styles.errorText}>{erro}</Text>
 
-          <Pressable style={styles.retryButton} onPress={carregarLivros}>
+          <Pressable style={styles.retryButton} onPress={carregarDados}>
             <Text style={styles.retryButtonText}>Tentar novamente</Text>
           </Pressable>
         </View>
@@ -136,73 +178,60 @@ export default function ListarLivrosScreen() {
         <View style={styles.emptyBox}>
           <Text style={styles.emptyTitle}>Nenhum livro encontrado</Text>
           <Text style={styles.emptyText}>
-            {isAdmin
-              ? 'Cadastre um novo livro para começar a montar o acervo.'
-              : 'Tente mudar a busca ou volte mais tarde.'}
+            Tente buscar por outro título, autor ou categoria.
           </Text>
         </View>
       )}
 
       {!carregando &&
         !erro &&
-        livrosFiltrados.map((livro) => (
-          <Pressable
-            key={livro.id}
-            style={styles.bookCard}
-            onPress={() =>
-              router.push({
-                pathname: '/detalhes-livro',
-                params: { id: livro.id },
-              } as any)
-            }
-          >
-            <View style={styles.bookInfo}>
-              <Text style={styles.bookTitle}>
-                {livro.titulo || livro.nome || 'Livro sem título'}
-              </Text>
+        livrosFiltrados.map((livro) => {
+          const disponivel = livroEstaDisponivel(livro);
+          const emprestado = livroEstaEmprestado(livro);
+          const temInteresse = usuarioTemInteresse(livro.id);
 
-              <Text style={styles.bookAuthor}>
-                {livro.autor || 'Autor não informado'}
-              </Text>
+          return (
+            <Pressable
+              key={livro.id}
+              style={styles.bookCard}
+              onPress={() =>
+                router.push({
+                  pathname: '/detalhes-livro',
+                  params: { id: livro.id },
+                } as any)
+              }
+            >
+              <View style={styles.bookInfo}>
+                <Text style={styles.bookTitle}>
+                  {livro.titulo || livro.nome || 'Livro sem título'}
+                </Text>
 
-              {livro.categoria ? (
-                <Text style={styles.bookCategory}>{livro.categoria}</Text>
-              ) : null}
-            </View>
+                <Text style={styles.bookAuthor}>
+                  {livro.autor || 'Autor não informado'}
+                </Text>
 
-            <View style={styles.statusArea}>
-              <Text style={styles.bookStatus}>
-                {livro.status ||
-                  (livro.disponivel === false ? 'Emprestado' : 'Disponível')}
-              </Text>
-{isAdmin && (
-  <Pressable
-    onPress={(event) => {
-      event.stopPropagation();
+                {livro.categoria ? (
+                  <Text style={styles.bookCategory}>{livro.categoria}</Text>
+                ) : null}
+              </View>
 
-      router.push({
-        pathname: '/editar-livro',
-        params: { id: livro.id },
-      } as any);
-    }}
-  >
-    <Text style={styles.editText}>Editar</Text>
-  </Pressable>
-)}
-
-              {isUsuario && (
-                <Pressable
-                  onPress={(event) => {
-                    event.stopPropagation();
-                    registrarInteresse(livro.id);
-                  }}
+              <View style={styles.statusArea}>
+                <Text
+                  style={[
+                    styles.bookStatus,
+                    disponivel ? styles.availableStatus : styles.borrowedStatus,
+                  ]}
                 >
-                  <Text style={styles.interestText}>Tenho interesse</Text>
-                </Pressable>
-              )}
-            </View>
-          </Pressable>
-        ))}
+                  {disponivel ? 'DISPONÍVEL' : 'EMPRESTADO'}
+                </Text>
+
+                {isUsuario && emprestado && temInteresse && (
+                  <Text style={styles.interestText}>Interesse registrado</Text>
+                )}
+              </View>
+            </Pressable>
+          );
+        })}
     </ScrollView>
   );
 }
@@ -218,44 +247,55 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#111827',
-    padding: 18,
     borderRadius: 18,
+    padding: 18,
     marginBottom: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  backText: {
+    color: '#ffffff',
+    fontWeight: '600',
+  },
   headerCenter: {
     alignItems: 'center',
   },
-  backText: {
-    color: '#d1d5db',
-    fontWeight: '600',
-  },
-  title: {
+  headerTitle: {
     color: '#ffffff',
     fontSize: 22,
     fontWeight: 'bold',
   },
-  roleText: {
+  headerSubtitle: {
     color: '#93c5fd',
     fontSize: 12,
+    fontWeight: '700',
     marginTop: 2,
   },
-  addText: {
-    color: '#60a5fa',
-    fontWeight: 'bold',
-  },
   placeholderRight: {
-    width: 38,
+    width: 42,
+  },
+  createButton: {
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#2563eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  createButtonText: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
   searchInput: {
-    backgroundColor: '#ffffff',
     height: 48,
+    backgroundColor: '#ffffff',
     borderRadius: 14,
     paddingHorizontal: 14,
     borderWidth: 1,
     borderColor: '#e5e7eb',
+    fontSize: 15,
     marginBottom: 16,
   },
   feedbackBox: {
@@ -263,8 +303,8 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   feedbackText: {
-    color: '#6b7280',
     marginTop: 8,
+    color: '#6b7280',
   },
   errorBox: {
     backgroundColor: '#fef2f2',
@@ -277,8 +317,8 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     backgroundColor: '#dc2626',
-    padding: 10,
     borderRadius: 10,
+    padding: 10,
     alignItems: 'center',
   },
   retryButtonText: {
@@ -287,14 +327,14 @@ const styles = StyleSheet.create({
   },
   emptyBox: {
     backgroundColor: '#ffffff',
-    padding: 18,
     borderRadius: 14,
+    padding: 16,
     borderWidth: 1,
     borderColor: '#e5e7eb',
   },
   emptyTitle: {
-    fontWeight: 'bold',
     color: '#111827',
+    fontWeight: 'bold',
     marginBottom: 4,
   },
   emptyText: {
@@ -318,34 +358,35 @@ const styles = StyleSheet.create({
     color: '#111827',
     fontWeight: 'bold',
     fontSize: 16,
+    marginBottom: 4,
   },
   bookAuthor: {
     color: '#6b7280',
-    marginTop: 4,
+    marginBottom: 8,
   },
   bookCategory: {
     color: '#374151',
-    marginTop: 6,
     fontSize: 12,
   },
   statusArea: {
+    minWidth: 100,
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-    gap: 8,
   },
   bookStatus: {
-    color: '#2563eb',
-    fontSize: 12,
     fontWeight: 'bold',
-  },
-  editText: {
-    color: '#111827',
-    fontWeight: '700',
     fontSize: 12,
+  },
+  availableStatus: {
+    color: '#2563eb',
+  },
+  borrowedStatus: {
+    color: '#dc2626',
   },
   interestText: {
     color: '#16a34a',
     fontWeight: '700',
     fontSize: 12,
+    textAlign: 'right',
   },
 });

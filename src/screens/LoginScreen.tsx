@@ -5,7 +5,6 @@ import {
   TextInput,
   Pressable,
   StyleSheet,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
@@ -15,10 +14,13 @@ export default function LoginRoute() {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [carregando, setCarregando] = useState(false);
+  const [mensagemErro, setMensagemErro] = useState('');
 
   async function handleLogin() {
+    setMensagemErro('');
+
     if (!email.trim() || !senha.trim()) {
-      Alert.alert('Atenção', 'Preencha e-mail e senha.');
+      setMensagemErro('Preencha e-mail e senha.');
       return;
     }
 
@@ -37,8 +39,8 @@ export default function LoginRoute() {
       await salvarSessao(response.token, response.role);
 
       router.replace('/home' as any);
-    } catch (error) {
-      Alert.alert('Erro no login', 'E-mail ou senha inválidos.');
+    } catch {
+      setMensagemErro('E-mail ou senha inválidos.');
     } finally {
       setCarregando(false);
     }
@@ -52,22 +54,28 @@ export default function LoginRoute() {
       <View style={styles.form}>
         <Text style={styles.label}>E-mail</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, mensagemErro && !email.trim() && styles.inputError]}
           placeholder="Digite seu e-mail"
           placeholderTextColor="#999"
           value={email}
-          onChangeText={setEmail}
+          onChangeText={(value) => {
+            setEmail(value);
+            setMensagemErro('');
+          }}
           keyboardType="email-address"
           autoCapitalize="none"
         />
 
         <Text style={styles.label}>Senha</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, mensagemErro && !senha.trim() && styles.inputError]}
           placeholder="Digite sua senha"
           placeholderTextColor="#999"
           value={senha}
-          onChangeText={setSenha}
+          onChangeText={(value) => {
+            setSenha(value);
+            setMensagemErro('');
+          }}
           secureTextEntry
         />
 
@@ -82,6 +90,10 @@ export default function LoginRoute() {
             <Text style={styles.buttonText}>Entrar</Text>
           )}
         </Pressable>
+
+        {mensagemErro ? (
+          <Text style={styles.errorText}>{mensagemErro}</Text>
+        ) : null}
 
         <Pressable onPress={() => router.push('/cadastro' as any)}>
           <Text style={styles.link}>Ainda não tenho conta</Text>
@@ -130,6 +142,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: '#ffffff',
   },
+  inputError: {
+    borderColor: '#dc2626',
+  },
   button: {
     height: 48,
     borderRadius: 8,
@@ -137,7 +152,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 8,
-    marginBottom: 16,
+    marginBottom: 10,
   },
   buttonDisabled: {
     opacity: 0.7,
@@ -146,6 +161,12 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  errorText: {
+    color: '#dc2626',
+    textAlign: 'center',
+    fontWeight: '600',
+    marginBottom: 14,
   },
   link: {
     textAlign: 'center',

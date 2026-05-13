@@ -20,8 +20,17 @@ type Livro = {
   disponivel?: boolean;
 };
 
+type Interesse = {
+  id?: number;
+  livroId?: number;
+  livro?: {
+    id?: number;
+  };
+};
+
 export default function HomeScreen() {
   const [livros, setLivros] = useState<Livro[]>([]);
+  const [interessesIds, setInteressesIds] = useState<number[]>([]);
   const [role, setRole] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
@@ -39,7 +48,23 @@ export default function HomeScreen() {
 
       const data = await apiFetch('/livros');
       setLivros(data);
-    } catch (error) {
+
+      if (roleSalva === 'USUARIO') {
+        try {
+          const interesses: Interesse[] = await apiFetch('/interesses/meus');
+
+          const ids = interesses
+            .map((interesse) => interesse.livroId || interesse.livro?.id)
+            .filter((id): id is number => typeof id === 'number');
+
+          setInteressesIds(ids);
+        } catch {
+          setInteressesIds([]);
+        }
+      } else {
+        setInteressesIds([]);
+      }
+    } catch {
       setErro('Não foi possível carregar os dados da Home.');
     } finally {
       setCarregando(false);
@@ -51,24 +76,40 @@ export default function HomeScreen() {
     router.replace('/login' as any);
   }
 
-  useEffect(() => {
-    carregarDados();
-  }, []);
-
-  const totalLivros = livros.length;
-
-  const livrosDisponiveis = livros.filter((livro) => {
+  function livroEstaDisponivel(livro: Livro) {
     if (typeof livro.disponivel === 'boolean') {
       return livro.disponivel;
     }
 
     if (livro.status) {
-      return livro.status.toUpperCase().includes('DISPON');
+      return livro.status.toUpperCase() === 'DISPONIVEL';
     }
 
     return true;
-  }).length;
+  }
 
+  function livroEstaEmprestado(livro: Livro) {
+    if (livro.status) {
+      return livro.status.toUpperCase() === 'EMPRESTADO';
+    }
+
+    if (typeof livro.disponivel === 'boolean') {
+      return !livro.disponivel;
+    }
+
+    return false;
+  }
+
+  function usuarioTemInteresse(livroId: number) {
+    return interessesIds.includes(livroId);
+  }
+
+  useEffect(() => {
+    carregarDados();
+  }, []);
+
+  const totalLivros = livros.length;
+  const livrosDisponiveis = livros.filter(livroEstaDisponivel).length;
   const livrosEmprestados = totalLivros - livrosDisponiveis;
   const livrosRecentes = livros.slice(0, 4);
 
@@ -192,59 +233,61 @@ export default function HomeScreen() {
 
         {!carregando &&
           !erro &&
-          livrosRecentes.map((livro) => (
-            <Pressable
+          livrosRecentes.map((livro) => {
+            const disponivel = livroEstaDisponivel(livro);
+            const emprestado = livroEstaEmprestado(livro);
+            const temInteresse = usuarioTemInteresse(livro.id);
+
+            return (
+              <Pressable
                 key={livro.id}
                 style={styles.bookCard}
                 onPress={() =>
-                 router.push({
-                 pathname: '/detalhes-livro',
-                 params: { id: livro.id },
+                  router.push({
+                    pathname: '/detalhes-livro',
+                    params: { id: livro.id },
                   } as any)
-               }
-            >
-              <View style={styles.bookInfo}>
-                <Text style={styles.bookTitle}>
-                  {livro.titulo || livro.nome || 'Livro sem título'}
-                </Text>
+                }
+              >
+                <View style={styles.bookInfo}>
+                  <Text style={styles.bookTitle}>
+                    {livro.titulo || livro.nome || 'Livro sem título'}
+                  </Text>
 
-                <Text style={styles.bookAuthor}>
-                  {livro.autor || 'Autor não informado'}
-                </Text>
+                  <Text style={styles.bookAuthor}>
+                    {livro.autor || 'Autor não informado'}
+                  </Text>
 
-                {livro.categoria ? (
-                  <Text style={styles.bookCategory}>{livro.categoria}</Text>
-                ) : null}
-              </View>
+                  {livro.categoria ? (
+                    <Text style={styles.bookCategory}>{livro.categoria}</Text>
+                  ) : null}
+                </View>
 
-              <View style={styles.statusArea}>
-                <Text style={styles.bookStatus}>
-                  {livro.status ||
-                    (livro.disponivel === false ? 'Emprestado' : 'Disponível')}
-                </Text>
+                <View style={styles.statusArea}>
+                  <Text
+                    style={[
+                      styles.bookStatus,
+                      disponivel ? styles.availableStatus : styles.borrowedStatus,
+                    ]}
+                  >
+                    {disponivel ? 'DISPONÍVEL' : 'EMPRESTADO'}
+                  </Text>
 
-                {isUsuario && (
-                  <Pressable>
-                    <Text style={styles.interestText}>Tenho interesse</Text>
-                  </Pressable>
-                )}
-              </View>
-            </Pressable>
-          ))}
+                  {isUsuario && emprestado && temInteresse && (
+                    <Text style={styles.interestText}>Interesse registrado</Text>
+                  )}
+                </View>
+              </Pressable>
+            );
+          })}
       </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  page: {
-    flex: 1,
-    backgroundColor: '#f3f4f6',
-  },
-  content: {
-    padding: 20,
-    paddingBottom: 110,
-  },
+  page: { flex: 1, backgroundColor: '#f3f4f6' },
+  content: { padding: 20, paddingBottom: 110 },
   header: {
     backgroundColor: '#111827',
     padding: 20,
@@ -254,40 +297,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
-  headerTextArea: {
-    flex: 1,
-    paddingRight: 12,
-  },
-  title: {
-    fontSize: 30,
-    fontWeight: 'bold',
-    color: '#ffffff',
-  },
-  subtitle: {
-    color: '#d1d5db',
-    marginTop: 4,
-  },
-  roleBadge: {
-    marginTop: 10,
-    color: '#93c5fd',
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  logoutButton: {
-    backgroundColor: '#374151',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-  },
-  logoutText: {
-    color: '#ffffff',
-    fontWeight: '600',
-  },
-  cardsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 18,
-  },
+  headerTextArea: { flex: 1, paddingRight: 12 },
+  title: { fontSize: 30, fontWeight: 'bold', color: '#ffffff' },
+  subtitle: { color: '#d1d5db', marginTop: 4 },
+  roleBadge: { marginTop: 10, color: '#93c5fd', fontWeight: '700', fontSize: 12 },
+  logoutButton: { backgroundColor: '#374151', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10 },
+  logoutText: { color: '#ffffff', fontWeight: '600' },
+  cardsRow: { flexDirection: 'row', gap: 10, marginBottom: 18 },
   summaryCard: {
     flex: 1,
     backgroundColor: '#ffffff',
@@ -296,20 +312,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e5e7eb',
   },
-  summaryNumber: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#2563eb',
-    marginBottom: 4,
-  },
-  summaryLabel: {
-    fontSize: 12,
-    color: '#6b7280',
-  },
-  actions: {
-    gap: 10,
-    marginBottom: 22,
-  },
+  summaryNumber: { fontSize: 24, fontWeight: 'bold', color: '#2563eb', marginBottom: 4 },
+  summaryLabel: { fontSize: 12, color: '#6b7280' },
+  actions: { gap: 10, marginBottom: 22 },
   primaryButton: {
     height: 48,
     backgroundColor: '#2563eb',
@@ -317,11 +322,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  primaryButtonText: {
-    color: '#ffffff',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
+  primaryButtonText: { color: '#ffffff', fontWeight: 'bold', fontSize: 16 },
   secondaryButton: {
     height: 48,
     backgroundColor: '#ffffff',
@@ -331,11 +332,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  secondaryButtonText: {
-    color: '#1f2937',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
+  secondaryButtonText: { color: '#1f2937', fontWeight: 'bold', fontSize: 16 },
   section: {
     backgroundColor: '#ffffff',
     borderRadius: 18,
@@ -343,61 +340,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e5e7eb',
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#111827',
-  },
-  refreshText: {
-    color: '#2563eb',
-    fontWeight: '700',
-  },
-  feedbackBox: {
-    alignItems: 'center',
-    padding: 20,
-  },
-  feedbackText: {
-    marginTop: 8,
-    color: '#6b7280',
-  },
-  errorBox: {
-    backgroundColor: '#fef2f2',
-    borderRadius: 12,
-    padding: 14,
-  },
-  errorText: {
-    color: '#991b1b',
-    marginBottom: 12,
-  },
-  retryButton: {
-    backgroundColor: '#dc2626',
-    borderRadius: 10,
-    padding: 10,
-    alignItems: 'center',
-  },
-  retryButtonText: {
-    color: '#ffffff',
-    fontWeight: 'bold',
-  },
-  emptyBox: {
-    backgroundColor: '#f9fafb',
-    borderRadius: 12,
-    padding: 16,
-  },
-  emptyTitle: {
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  emptyText: {
-    color: '#6b7280',
-  },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  sectionTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
+  refreshText: { color: '#2563eb', fontWeight: '700' },
+  feedbackBox: { alignItems: 'center', padding: 20 },
+  feedbackText: { marginTop: 8, color: '#6b7280' },
+  errorBox: { backgroundColor: '#fef2f2', borderRadius: 12, padding: 14 },
+  errorText: { color: '#991b1b', marginBottom: 12 },
+  retryButton: { backgroundColor: '#dc2626', borderRadius: 10, padding: 10, alignItems: 'center' },
+  retryButtonText: { color: '#ffffff', fontWeight: 'bold' },
+  emptyBox: { backgroundColor: '#f9fafb', borderRadius: 12, padding: 16 },
+  emptyTitle: { fontWeight: 'bold', color: '#111827', marginBottom: 4 },
+  emptyText: { color: '#6b7280' },
   bookCard: {
     borderWidth: 1,
     borderColor: '#e5e7eb',
@@ -408,36 +362,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
   },
-  bookInfo: {
-    flex: 1,
-  },
-  bookTitle: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#111827',
-  },
-  bookAuthor: {
-    color: '#6b7280',
-    marginTop: 3,
-  },
-  bookCategory: {
-    color: '#374151',
-    marginTop: 6,
-    fontSize: 12,
-  },
-  statusArea: {
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  bookStatus: {
-    color: '#2563eb',
-    fontWeight: 'bold',
-    fontSize: 12,
-  },
-  interestText: {
-    color: '#16a34a',
-    fontWeight: '700',
-    fontSize: 12,
-  },
+  bookInfo: { flex: 1 },
+  bookTitle: { fontSize: 15, fontWeight: 'bold', color: '#111827' },
+  bookAuthor: { color: '#6b7280', marginTop: 3 },
+  bookCategory: { color: '#374151', marginTop: 6, fontSize: 12 },
+  statusArea: { alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 },
+  bookStatus: { fontWeight: 'bold', fontSize: 12 },
+  availableStatus: { color: '#2563eb' },
+  borrowedStatus: { color: '#dc2626' },
+  interestText: { color: '#16a34a', fontWeight: '700', fontSize: 12 },
 });

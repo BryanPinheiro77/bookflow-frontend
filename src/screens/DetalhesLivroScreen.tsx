@@ -49,6 +49,18 @@ type Emprestimo = {
   };
 };
 
+function getImageUrl(capaUrl?: string | null) {
+  if (!capaUrl) {
+    return null;
+  }
+
+  if (capaUrl.startsWith('http://') || capaUrl.startsWith('https://')) {
+    return capaUrl;
+  }
+
+  return `${API_BASE_URL}${capaUrl}`;
+}
+
 export default function DetalhesLivroScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
 
@@ -241,6 +253,8 @@ export default function DetalhesLivroScreen() {
     carregarLivro();
   }, [id]);
 
+  const imageUrl = getImageUrl(livro?.capaUrl);
+
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.content}>
       <View style={styles.header}>
@@ -273,9 +287,9 @@ export default function DetalhesLivroScreen() {
       {!carregando && !erro && livro && (
         <>
           <View style={styles.coverArea}>
-            {livro.capaUrl ? (
+            {imageUrl ? (
               <Image
-                source={{ uri: `${API_BASE_URL}${livro.capaUrl}` }}
+                source={{ uri: imageUrl }}
                 style={styles.coverImage}
                 resizeMode="cover"
               />

@@ -30,6 +30,16 @@ type ImagemSelecionada = {
   type: string;
 };
 
+function getImageUrl(capaUrl?: string | null) {
+  if (!capaUrl) return null;
+
+  if (capaUrl.startsWith('http://') || capaUrl.startsWith('https://')) {
+    return capaUrl;
+  }
+
+  return `${API_BASE_URL}${capaUrl}`;
+}
+
 export default function EditarLivroScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
 
@@ -64,9 +74,7 @@ export default function EditarLivroScreen() {
       setCapaAtualUrl(livro.capaUrl || null);
     } catch (error) {
       const mensagemErro =
-        error instanceof Error
-          ? error.message
-          : 'Não foi possível carregar o livro.';
+        error instanceof Error ? error.message : 'Não foi possível carregar o livro.';
 
       setErro(mensagemErro);
     } finally {
@@ -81,9 +89,7 @@ export default function EditarLivroScreen() {
       quality: 0.8,
     });
 
-    if (resultado.canceled) {
-      return;
-    }
+    if (resultado.canceled) return;
 
     const asset = resultado.assets[0];
 
@@ -95,9 +101,7 @@ export default function EditarLivroScreen() {
   }
 
   async function montarFormDataDaImagem() {
-    if (!novaImagem) {
-      return null;
-    }
+    if (!novaImagem) return null;
 
     const formData = new FormData();
 
@@ -157,9 +161,7 @@ export default function EditarLivroScreen() {
       router.replace('/livros' as any);
     } catch (error) {
       const mensagemErro =
-        error instanceof Error
-          ? error.message
-          : 'Não foi possível atualizar o livro.';
+        error instanceof Error ? error.message : 'Não foi possível atualizar o livro.';
 
       setMensagem(mensagemErro);
     } finally {
@@ -168,9 +170,7 @@ export default function EditarLivroScreen() {
   }
 
   async function removerCapa() {
-    if (!id) {
-      return;
-    }
+    if (!id) return;
 
     try {
       setSalvando(true);
@@ -185,9 +185,7 @@ export default function EditarLivroScreen() {
       setMensagem('Capa removida com sucesso.');
     } catch (error) {
       const mensagemErro =
-        error instanceof Error
-          ? error.message
-          : 'Não foi possível remover a capa.';
+        error instanceof Error ? error.message : 'Não foi possível remover a capa.';
 
       setMensagem(mensagemErro);
     } finally {
@@ -198,6 +196,8 @@ export default function EditarLivroScreen() {
   useEffect(() => {
     carregarLivro();
   }, [id]);
+
+  const capaParaExibir = novaImagem?.uri || getImageUrl(capaAtualUrl);
 
   if (carregando) {
     return (
@@ -247,14 +247,8 @@ export default function EditarLivroScreen() {
           />
 
           <View style={styles.coverArea}>
-            {novaImagem ? (
-              <Image source={{ uri: novaImagem.uri }} style={styles.preview} resizeMode="cover" />
-            ) : capaAtualUrl ? (
-              <Image
-                source={{ uri: `${API_BASE_URL}${capaAtualUrl}` }}
-                style={styles.preview}
-                resizeMode="cover"
-              />
+            {capaParaExibir ? (
+              <Image source={{ uri: capaParaExibir }} style={styles.preview} resizeMode="cover" />
             ) : (
               <View style={styles.coverPlaceholder}>
                 <Text style={styles.coverPlaceholderText}>Sem capa</Text>
@@ -309,33 +303,11 @@ export default function EditarLivroScreen() {
 }
 
 const styles = StyleSheet.create({
-  page: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-  },
-  container: {
-    flexGrow: 1,
-    padding: 24,
-    justifyContent: 'center',
-    paddingBottom: 110,
-  },
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    color: '#6b7280',
-    marginTop: 8,
-  },
-  title: {
-    fontSize: 30,
-    fontWeight: 'bold',
-    color: '#111827',
-    textAlign: 'center',
-    marginBottom: 28,
-  },
+  page: { flex: 1, backgroundColor: '#ffffff' },
+  container: { flexGrow: 1, padding: 24, justifyContent: 'center', paddingBottom: 110 },
+  loadingContainer: { flex: 1, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center' },
+  loadingText: { color: '#6b7280', marginTop: 8 },
+  title: { fontSize: 30, fontWeight: 'bold', color: '#111827', textAlign: 'center', marginBottom: 28 },
   input: {
     height: 48,
     borderWidth: 1,
@@ -346,17 +318,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: '#ffffff',
   },
-  coverArea: {
-    alignItems: 'center',
-    marginTop: 6,
-    marginBottom: 14,
-  },
-  preview: {
-    width: 120,
-    height: 170,
-    borderRadius: 12,
-    backgroundColor: '#e5e7eb',
-  },
+  coverArea: { alignItems: 'center', marginTop: 6, marginBottom: 14 },
+  preview: { width: 120, height: 170, borderRadius: 12, backgroundColor: '#e5e7eb' },
   coverPlaceholder: {
     width: 120,
     height: 170,
@@ -365,10 +328,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  coverPlaceholderText: {
-    color: '#6b7280',
-    fontWeight: '600',
-  },
+  coverPlaceholderText: { color: '#6b7280', fontWeight: '600' },
   imageButton: {
     height: 48,
     borderRadius: 10,
@@ -379,11 +339,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     backgroundColor: '#eff6ff',
   },
-  imageButtonText: {
-    color: '#2563eb',
-    fontWeight: 'bold',
-    fontSize: 15,
-  },
+  imageButtonText: { color: '#2563eb', fontWeight: 'bold', fontSize: 15 },
   removeCoverButton: {
     height: 44,
     borderRadius: 10,
@@ -394,10 +350,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     backgroundColor: '#fef2f2',
   },
-  removeCoverText: {
-    color: '#dc2626',
-    fontWeight: 'bold',
-  },
+  removeCoverText: { color: '#dc2626', fontWeight: 'bold' },
   button: {
     height: 48,
     borderRadius: 10,
@@ -407,48 +360,14 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 18,
   },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  backText: {
-    color: '#2563eb',
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  message: {
-    textAlign: 'center',
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  successMessage: {
-    color: '#16a34a',
-  },
-  errorMessage: {
-    color: '#dc2626',
-  },
-  errorBox: {
-    backgroundColor: '#fef2f2',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 16,
-  },
-  errorText: {
-    color: '#991b1b',
-    marginBottom: 12,
-  },
-  retryButton: {
-    backgroundColor: '#dc2626',
-    padding: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  retryButtonText: {
-    color: '#ffffff',
-    fontWeight: 'bold',
-  },
+  buttonDisabled: { opacity: 0.7 },
+  buttonText: { color: '#ffffff', fontWeight: 'bold', fontSize: 16 },
+  backText: { color: '#2563eb', fontWeight: '600', textAlign: 'center' },
+  message: { textAlign: 'center', fontWeight: '600', marginBottom: 8 },
+  successMessage: { color: '#16a34a' },
+  errorMessage: { color: '#dc2626' },
+  errorBox: { backgroundColor: '#fef2f2', borderRadius: 14, padding: 14, marginBottom: 16 },
+  errorText: { color: '#991b1b', marginBottom: 12 },
+  retryButton: { backgroundColor: '#dc2626', padding: 10, borderRadius: 10, alignItems: 'center' },
+  retryButtonText: { color: '#ffffff', fontWeight: 'bold' },
 });
