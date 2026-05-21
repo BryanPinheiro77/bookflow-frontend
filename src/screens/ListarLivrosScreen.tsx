@@ -18,7 +18,14 @@ type Livro = {
   autor?: string;
   categoria?: string;
   status?: string;
-  disponivel?: boolean;
+  capaUrl?: string;
+  adminId?: number;
+
+  quantidadeTotal?: number;
+  quantidadeDisponivel?: number;
+
+  valorEmprestimo?: number;
+  valorMultaDiaria?: number;
 };
 
 type Interesse = {
@@ -33,7 +40,9 @@ export default function LivrosScreen() {
   const [livros, setLivros] = useState<Livro[]>([]);
   const [interessesIds, setInteressesIds] = useState<number[]>([]);
   const [role, setRole] = useState<string | null>(null);
+
   const [busca, setBusca] = useState('');
+
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
 
@@ -48,16 +57,26 @@ export default function LivrosScreen() {
       const roleSalva = await buscarRole();
       setRole(roleSalva);
 
-      const livrosCarregados: Livro[] = await apiFetch('/livros');
+      const livrosCarregados: Livro[] =
+        await apiFetch('/livros');
+
       setLivros(livrosCarregados);
 
       if (roleSalva === 'USUARIO') {
         try {
-          const interesses: Interesse[] = await apiFetch('/interesses/meus');
+          const interesses: Interesse[] =
+            await apiFetch('/interesses/meus');
 
           const ids = interesses
-            .map((interesse) => interesse.livroId || interesse.livro?.id)
-            .filter((id): id is number => typeof id === 'number');
+            .map(
+              (interesse) =>
+                interesse.livroId ||
+                interesse.livro?.id
+            )
+            .filter(
+              (id): id is number =>
+                typeof id === 'number'
+            );
 
           setInteressesIds(ids);
         } catch {
@@ -74,27 +93,13 @@ export default function LivrosScreen() {
   }
 
   function livroEstaDisponivel(livro: Livro) {
-    if (typeof livro.disponivel === 'boolean') {
-      return livro.disponivel;
-    }
-
-    if (livro.status) {
-      return livro.status.toUpperCase() === 'DISPONIVEL';
-    }
-
-    return true;
+    return (livro.quantidadeDisponivel || 0) > 0;
   }
 
-  function livroEstaEmprestado(livro: Livro) {
-    if (livro.status) {
-      return livro.status.toUpperCase() === 'EMPRESTADO';
-    }
-
-    if (typeof livro.disponivel === 'boolean') {
-      return !livro.disponivel;
-    }
-
-    return false;
+  function obterTextoStatus(livro: Livro) {
+    return livroEstaDisponivel(livro)
+      ? 'DISPONÍVEL'
+      : 'INDISPONÍVEL';
   }
 
   function usuarioTemInteresse(livroId: number) {
@@ -107,9 +112,19 @@ export default function LivrosScreen() {
     if (!termo) return livros;
 
     return livros.filter((livro) => {
-      const titulo = (livro.titulo || livro.nome || '').toLowerCase();
-      const autor = (livro.autor || '').toLowerCase();
-      const categoria = (livro.categoria || '').toLowerCase();
+      const titulo = (
+        livro.titulo ||
+        livro.nome ||
+        ''
+      ).toLowerCase();
+
+      const autor = (
+        livro.autor || ''
+      ).toLowerCase();
+
+      const categoria = (
+        livro.categoria || ''
+      ).toLowerCase();
 
       return (
         titulo.includes(termo) ||
@@ -124,16 +139,30 @@ export default function LivrosScreen() {
   }, []);
 
   return (
-    <ScrollView style={styles.page} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.page}
+      contentContainerStyle={styles.content}
+    >
       <View style={styles.header}>
-        <Pressable onPress={() => router.replace('/home' as any)}>
-          <Text style={styles.backText}>Voltar</Text>
+        <Pressable
+          onPress={() =>
+            router.replace('/home' as any)
+          }
+        >
+          <Text style={styles.backText}>
+            Voltar
+          </Text>
         </Pressable>
 
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Acervo</Text>
+          <Text style={styles.headerTitle}>
+            Acervo
+          </Text>
+
           <Text style={styles.headerSubtitle}>
-            {isAdmin ? 'Administrador' : 'Usuário'}
+            {isAdmin
+              ? 'Administrador'
+              : 'Usuário'}
           </Text>
         </View>
 
@@ -143,9 +172,15 @@ export default function LivrosScreen() {
       {isAdmin && (
         <Pressable
           style={styles.createButton}
-          onPress={() => router.push('/cadastrar-livro' as any)}
+          onPress={() =>
+            router.push(
+              '/cadastrar-livro' as any
+            )
+          }
         >
-          <Text style={styles.createButtonText}>Cadastrar novo livro</Text>
+          <Text style={styles.createButtonText}>
+            Cadastrar novo livro
+          </Text>
         </Pressable>
       )}
 
@@ -160,35 +195,53 @@ export default function LivrosScreen() {
       {carregando && (
         <View style={styles.feedbackBox}>
           <ActivityIndicator />
-          <Text style={styles.feedbackText}>Carregando acervo...</Text>
+
+          <Text style={styles.feedbackText}>
+            Carregando acervo...
+          </Text>
         </View>
       )}
 
       {!carregando && erro ? (
         <View style={styles.errorBox}>
-          <Text style={styles.errorText}>{erro}</Text>
+          <Text style={styles.errorText}>
+            {erro}
+          </Text>
 
-          <Pressable style={styles.retryButton} onPress={carregarDados}>
-            <Text style={styles.retryButtonText}>Tentar novamente</Text>
+          <Pressable
+            style={styles.retryButton}
+            onPress={carregarDados}
+          >
+            <Text style={styles.retryButtonText}>
+              Tentar novamente
+            </Text>
           </Pressable>
         </View>
       ) : null}
 
-      {!carregando && !erro && livrosFiltrados.length === 0 && (
-        <View style={styles.emptyBox}>
-          <Text style={styles.emptyTitle}>Nenhum livro encontrado</Text>
-          <Text style={styles.emptyText}>
-            Tente buscar por outro título, autor ou categoria.
-          </Text>
-        </View>
-      )}
+      {!carregando &&
+        !erro &&
+        livrosFiltrados.length === 0 && (
+          <View style={styles.emptyBox}>
+            <Text style={styles.emptyTitle}>
+              Nenhum livro encontrado
+            </Text>
+
+            <Text style={styles.emptyText}>
+              Tente buscar por outro título,
+              autor ou categoria.
+            </Text>
+          </View>
+        )}
 
       {!carregando &&
         !erro &&
         livrosFiltrados.map((livro) => {
-          const disponivel = livroEstaDisponivel(livro);
-          const emprestado = livroEstaEmprestado(livro);
-          const temInteresse = usuarioTemInteresse(livro.id);
+          const disponivel =
+            livroEstaDisponivel(livro);
+
+          const temInteresse =
+            usuarioTemInteresse(livro.id);
 
           return (
             <Pressable
@@ -196,38 +249,122 @@ export default function LivrosScreen() {
               style={styles.bookCard}
               onPress={() =>
                 router.push({
-                  pathname: '/detalhes-livro',
-                  params: { id: livro.id },
+                  pathname:
+                    '/detalhes-livro',
+                  params: {
+                    id: livro.id,
+                  },
                 } as any)
               }
             >
               <View style={styles.bookInfo}>
                 <Text style={styles.bookTitle}>
-                  {livro.titulo || livro.nome || 'Livro sem título'}
+                  {livro.titulo ||
+                    livro.nome ||
+                    'Livro sem título'}
                 </Text>
 
                 <Text style={styles.bookAuthor}>
-                  {livro.autor || 'Autor não informado'}
+                  {livro.autor ||
+                    'Autor não informado'}
                 </Text>
 
                 {livro.categoria ? (
-                  <Text style={styles.bookCategory}>{livro.categoria}</Text>
+                  <Text
+                    style={
+                      styles.bookCategory
+                    }
+                  >
+                    {livro.categoria}
+                  </Text>
                 ) : null}
+
+                <View
+                  style={
+                    styles.extraInfoArea
+                  }
+                >
+                  <Text
+                    style={
+                      styles.extraInfoText
+                    }
+                  >
+                    Disponíveis:{' '}
+                    {
+                      livro.quantidadeDisponivel
+                    }
+                    /
+                    {
+                      livro.quantidadeTotal
+                    }
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.extraInfoText
+                    }
+                  >
+                    Empréstimo: R${' '}
+                    {livro.valorEmprestimo?.toFixed(
+                      2
+                    )}
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.extraInfoText
+                    }
+                  >
+                    Multa diária: R${' '}
+                    {livro.valorMultaDiaria?.toFixed(
+                      2
+                    )}
+                  </Text>
+                </View>
+
+                {!disponivel && (
+                  <View
+                    style={
+                      styles.stockWarning
+                    }
+                  >
+                    <Text
+                      style={
+                        styles.stockWarningText
+                      }
+                    >
+                      Todos os exemplares
+                      estão emprestados.
+                    </Text>
+                  </View>
+                )}
               </View>
 
               <View style={styles.statusArea}>
                 <Text
                   style={[
                     styles.bookStatus,
-                    disponivel ? styles.availableStatus : styles.borrowedStatus,
+                    disponivel
+                      ? styles.availableStatus
+                      : styles.borrowedStatus,
                   ]}
                 >
-                  {disponivel ? 'DISPONÍVEL' : 'EMPRESTADO'}
+                  {obterTextoStatus(
+                    livro
+                  )}
                 </Text>
 
-                {isUsuario && emprestado && temInteresse && (
-                  <Text style={styles.interestText}>Interesse registrado</Text>
-                )}
+                {isUsuario &&
+                  !disponivel &&
+                  temInteresse && (
+                    <Text
+                      style={
+                        styles.interestText
+                      }
+                    >
+                      Interesse registrado
+                    </Text>
+                  )}
               </View>
             </Pressable>
           );
@@ -241,10 +378,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f3f4f6',
   },
+
   content: {
     padding: 18,
     paddingBottom: 110,
   },
+
   header: {
     backgroundColor: '#111827',
     borderRadius: 18,
@@ -254,27 +393,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+
   backText: {
     color: '#ffffff',
     fontWeight: '600',
   },
+
   headerCenter: {
     alignItems: 'center',
   },
+
   headerTitle: {
     color: '#ffffff',
     fontSize: 22,
     fontWeight: 'bold',
   },
+
   headerSubtitle: {
     color: '#93c5fd',
     fontSize: 12,
     fontWeight: '700',
     marginTop: 2,
   },
+
   placeholderRight: {
     width: 42,
   },
+
   createButton: {
     height: 48,
     borderRadius: 12,
@@ -283,11 +428,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 14,
   },
+
   createButtonText: {
     color: '#ffffff',
     fontWeight: 'bold',
     fontSize: 16,
   },
+
   searchInput: {
     height: 48,
     backgroundColor: '#ffffff',
@@ -298,33 +445,40 @@ const styles = StyleSheet.create({
     fontSize: 15,
     marginBottom: 16,
   },
+
   feedbackBox: {
     alignItems: 'center',
     padding: 24,
   },
+
   feedbackText: {
     marginTop: 8,
     color: '#6b7280',
   },
+
   errorBox: {
     backgroundColor: '#fef2f2',
     borderRadius: 14,
     padding: 14,
   },
+
   errorText: {
     color: '#991b1b',
     marginBottom: 12,
   },
+
   retryButton: {
     backgroundColor: '#dc2626',
     borderRadius: 10,
     padding: 10,
     alignItems: 'center',
   },
+
   retryButtonText: {
     color: '#ffffff',
     fontWeight: 'bold',
   },
+
   emptyBox: {
     backgroundColor: '#ffffff',
     borderRadius: 14,
@@ -332,14 +486,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e5e7eb',
   },
+
   emptyTitle: {
     color: '#111827',
     fontWeight: 'bold',
     marginBottom: 4,
   },
+
   emptyText: {
     color: '#6b7280',
   },
+
   bookCard: {
     backgroundColor: '#ffffff',
     borderRadius: 16,
@@ -351,38 +508,73 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
   },
+
   bookInfo: {
     flex: 1,
   },
+
   bookTitle: {
     color: '#111827',
     fontWeight: 'bold',
     fontSize: 16,
     marginBottom: 4,
   },
+
   bookAuthor: {
     color: '#6b7280',
     marginBottom: 8,
   },
+
   bookCategory: {
     color: '#374151',
     fontSize: 12,
   },
+
+  extraInfoArea: {
+    marginTop: 10,
+  },
+
+  extraInfoText: {
+    color: '#374151',
+    fontSize: 12,
+    marginBottom: 4,
+    fontWeight: '600',
+  },
+
+  stockWarning: {
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#dc2626',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 10,
+  },
+
+  stockWarningText: {
+    color: '#991b1b',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+
   statusArea: {
     minWidth: 100,
     alignItems: 'flex-end',
     justifyContent: 'space-between',
   },
+
   bookStatus: {
     fontWeight: 'bold',
     fontSize: 12,
   },
+
   availableStatus: {
     color: '#2563eb',
   },
+
   borrowedStatus: {
     color: '#dc2626',
   },
+
   interestText: {
     color: '#16a34a',
     fontWeight: '700',

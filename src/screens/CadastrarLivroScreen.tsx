@@ -5,109 +5,71 @@ import {
   TextInput,
   Pressable,
   StyleSheet,
-  Image,
   ActivityIndicator,
-  Platform,
+  ScrollView,
 } from 'react-native';
 import { router } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
-import { apiFetch, apiUpload } from '../services/api';
-
-type ImagemSelecionada = {
-  uri: string;
-  name: string;
-  type: string;
-};
+import { apiFetch } from '../services/api';
 
 export default function CadastrarLivroScreen() {
   const [titulo, setTitulo] = useState('');
   const [autor, setAutor] = useState('');
   const [categoria, setCategoria] = useState('');
-  const [imagem, setImagem] = useState<ImagemSelecionada | null>(null);
+
+  const [quantidadeTotal, setQuantidadeTotal] = useState('');
+  const [quantidadeDisponivel, setQuantidadeDisponivel] = useState('');
+
+  const [valorEmprestimo, setValorEmprestimo] = useState('');
+  const [valorMultaDiaria, setValorMultaDiaria] = useState('');
+
   const [carregando, setCarregando] = useState(false);
   const [mensagem, setMensagem] = useState('');
 
-  async function selecionarImagem() {
-    const resultado = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      quality: 0.8,
-    });
+  async function cadastrarLivro() {
+    setMensagem('');
 
-    if (resultado.canceled) {
+    if (
+      !titulo.trim() ||
+      !autor.trim() ||
+      !categoria.trim() ||
+      !quantidadeTotal.trim() ||
+      !quantidadeDisponivel.trim() ||
+      !valorEmprestimo.trim() ||
+      !valorMultaDiaria.trim()
+    ) {
+      setMensagem('Preencha todos os campos.');
       return;
     }
 
-    const asset = resultado.assets[0];
+    const quantidadeTotalNumero = Number(quantidadeTotal);
+    const quantidadeDisponivelNumero = Number(quantidadeDisponivel);
 
-    const nomeArquivo =
-      asset.fileName || `capa-livro-${Date.now()}.jpg`;
+    if (quantidadeDisponivelNumero > quantidadeTotalNumero) {
+      setMensagem(
+        'Quantidade disponível não pode ser maior que a total.'
+      );
 
-    const tipoArquivo =
-      asset.mimeType || 'image/jpeg';
-
-    setImagem({
-      uri: asset.uri,
-      name: nomeArquivo,
-      type: tipoArquivo,
-    });
-  }
-
-  async function montarFormDataDaImagem() {
-    if (!imagem) {
-      return null;
-    }
-
-    const formData = new FormData();
-
-    if (Platform.OS === 'web') {
-      const response = await fetch(imagem.uri);
-      const blob = await response.blob();
-
-      const file = new File([blob], imagem.name, {
-        type: imagem.type,
-      });
-
-      formData.append('file', file);
-    } else {
-      formData.append('file', {
-        uri: imagem.uri,
-        name: imagem.name,
-        type: imagem.type,
-      } as any);
-    }
-
-    return formData;
-  }
-
-  async function cadastrarLivro() {
-    if (!titulo.trim() || !autor.trim() || !categoria.trim()) {
-      setMensagem('Preencha título, autor e categoria.');
       return;
     }
 
     try {
       setCarregando(true);
-      setMensagem('');
 
-      const livroCriado = await apiFetch('/livros', {
+      await apiFetch('/livros', {
         method: 'POST',
         body: JSON.stringify({
           titulo: titulo.trim(),
           autor: autor.trim(),
           categoria: categoria.trim(),
+
+          quantidadeTotal: quantidadeTotalNumero,
+          quantidadeDisponivel: quantidadeDisponivelNumero,
+
+          valorEmprestimo: Number(valorEmprestimo),
+          valorMultaDiaria: Number(valorMultaDiaria),
         }),
       });
 
-      if (imagem) {
-        const formData = await montarFormDataDaImagem();
-
-        if (formData) {
-          await apiUpload(`/livros/${livroCriado.id}/capa`, formData);
-        }
-      }
-
-      setMensagem('Livro cadastrado com sucesso.');
       router.replace('/livros' as any);
     } catch (error) {
       const mensagemErro =
@@ -122,157 +84,208 @@ export default function CadastrarLivroScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Cadastrar Livro</Text>
+    <ScrollView
+      style={styles.page}
+      contentContainerStyle={styles.content}
+    >
+      <View style={styles.header}>
+        <Pressable onPress={() => router.back()}>
+          <Text style={styles.backText}>Voltar</Text>
+        </Pressable>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Título"
-        placeholderTextColor="#6b7280"
-        value={titulo}
-        onChangeText={setTitulo}
-      />
+        <Text style={styles.headerTitle}>Cadastrar Livro</Text>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Autor"
-        placeholderTextColor="#6b7280"
-        value={autor}
-        onChangeText={setAutor}
-      />
+        <View style={styles.placeholderRight} />
+      </View>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Categoria"
-        placeholderTextColor="#6b7280"
-        value={categoria}
-        onChangeText={setCategoria}
-      />
+      <View style={styles.card}>
+        <Text style={styles.label}>Título</Text>
 
-      <Pressable style={styles.imageButton} onPress={selecionarImagem}>
-        <Text style={styles.imageButtonText}>
-          {imagem ? 'Trocar capa' : 'Selecionar capa'}
-        </Text>
-      </Pressable>
-
-      {imagem && (
-        <Image
-          source={{ uri: imagem.uri }}
-          style={styles.preview}
-          resizeMode="cover"
+        <TextInput
+          style={styles.input}
+          placeholder="Digite o título"
+          placeholderTextColor="#6b7280"
+          value={titulo}
+          onChangeText={setTitulo}
         />
-      )}
 
-      {mensagem ? (
-        <Text
+        <Text style={styles.label}>Autor</Text>
+
+        <TextInput
+          style={styles.input}
+          placeholder="Digite o autor"
+          placeholderTextColor="#6b7280"
+          value={autor}
+          onChangeText={setAutor}
+        />
+
+        <Text style={styles.label}>Categoria</Text>
+
+        <TextInput
+          style={styles.input}
+          placeholder="Digite a categoria"
+          placeholderTextColor="#6b7280"
+          value={categoria}
+          onChangeText={setCategoria}
+        />
+
+        <Text style={styles.label}>Quantidade total</Text>
+
+        <TextInput
+          style={styles.input}
+          placeholder="Quantidade total"
+          placeholderTextColor="#6b7280"
+          value={quantidadeTotal}
+          onChangeText={setQuantidadeTotal}
+          keyboardType="numeric"
+        />
+
+        <Text style={styles.label}>Quantidade disponível</Text>
+
+        <TextInput
+          style={styles.input}
+          placeholder="Quantidade disponível"
+          placeholderTextColor="#6b7280"
+          value={quantidadeDisponivel}
+          onChangeText={setQuantidadeDisponivel}
+          keyboardType="numeric"
+        />
+
+        <Text style={styles.label}>Valor do empréstimo</Text>
+
+        <TextInput
+          style={styles.input}
+          placeholder="Valor do empréstimo"
+          placeholderTextColor="#6b7280"
+          value={valorEmprestimo}
+          onChangeText={setValorEmprestimo}
+          keyboardType="numeric"
+        />
+
+        <Text style={styles.label}>Valor da multa diária</Text>
+
+        <TextInput
+          style={styles.input}
+          placeholder="Valor da multa diária"
+          placeholderTextColor="#6b7280"
+          value={valorMultaDiaria}
+          onChangeText={setValorMultaDiaria}
+          keyboardType="numeric"
+        />
+
+        {mensagem ? (
+          <Text style={styles.message}>
+            {mensagem}
+          </Text>
+        ) : null}
+
+        <Pressable
           style={[
-            styles.message,
-            mensagem.toLowerCase().includes('sucesso')
-              ? styles.successMessage
-              : styles.errorMessage,
+            styles.button,
+            carregando && styles.buttonDisabled,
           ]}
+          onPress={cadastrarLivro}
+          disabled={carregando}
         >
-          {mensagem}
-        </Text>
-      ) : null}
-
-      <Pressable
-        style={[styles.button, carregando && styles.buttonDisabled]}
-        onPress={cadastrarLivro}
-        disabled={carregando}
-      >
-        {carregando ? (
-          <ActivityIndicator color="#ffffff" />
-        ) : (
-          <Text style={styles.buttonText}>Salvar</Text>
-        )}
-      </Pressable>
-
-      <Pressable onPress={() => router.replace('/livros' as any)}>
-        <Text style={styles.backText}>Voltar</Text>
-      </Pressable>
-    </View>
+          {carregando ? (
+            <ActivityIndicator color="#ffffff" />
+          ) : (
+            <Text style={styles.buttonText}>
+              Cadastrar livro
+            </Text>
+          )}
+        </Pressable>
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  page: {
     flex: 1,
-    padding: 24,
-    backgroundColor: '#ffffff',
-    justifyContent: 'center',
+    backgroundColor: '#f3f4f6',
   },
-  title: {
-    fontSize: 30,
+
+  content: {
+    padding: 18,
+    paddingBottom: 110,
+  },
+
+  header: {
+    backgroundColor: '#111827',
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  backText: {
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+
+  headerTitle: {
+    color: '#ffffff',
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#111827',
-    textAlign: 'center',
-    marginBottom: 28,
   },
+
+  placeholderRight: {
+    width: 42,
+  },
+
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+
+  label: {
+    color: '#374151',
+    fontWeight: '600',
+    marginBottom: 6,
+    marginTop: 10,
+  },
+
   input: {
     height: 48,
     borderWidth: 1,
     borderColor: '#d1d5db',
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 14,
-    marginBottom: 14,
-    fontSize: 16,
     backgroundColor: '#ffffff',
-  },
-  imageButton: {
-    height: 48,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#2563eb',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-    backgroundColor: '#eff6ff',
-  },
-  imageButtonText: {
-    color: '#2563eb',
-    fontWeight: 'bold',
+    marginBottom: 8,
     fontSize: 15,
   },
-  preview: {
-    width: 120,
-    height: 170,
-    borderRadius: 12,
-    alignSelf: 'center',
-    marginBottom: 14,
-    backgroundColor: '#e5e7eb',
+
+  message: {
+    textAlign: 'center',
+    color: '#dc2626',
+    fontWeight: '600',
+    marginTop: 12,
+    marginBottom: 12,
   },
+
   button: {
-    height: 48,
-    borderRadius: 10,
+    height: 50,
+    borderRadius: 12,
     backgroundColor: '#2563eb',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
-    marginBottom: 18,
+    marginTop: 10,
   },
+
   buttonDisabled: {
     opacity: 0.7,
   },
+
   buttonText: {
     color: '#ffffff',
     fontWeight: 'bold',
     fontSize: 16,
-  },
-  backText: {
-    color: '#2563eb',
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  message: {
-    textAlign: 'center',
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  successMessage: {
-    color: '#16a34a',
-  },
-  errorMessage: {
-    color: '#dc2626',
   },
 });
