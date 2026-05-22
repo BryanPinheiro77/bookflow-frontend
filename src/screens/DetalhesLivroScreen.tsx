@@ -173,25 +173,35 @@ export default function DetalhesLivroScreen() {
             '/emprestimos/me'
           );
 
-        const livroEstaComigo =
-          meusEmprestimos.some(
-            (emprestimo) => {
-              const emprestimoLivroId =
-                emprestimo.livroId ||
-                emprestimo.livro?.id;
+        const livroEstaComigo = meusEmprestimos.some((emprestimo) => {
 
-              const statusEmprestimo =
-                emprestimo.status?.toUpperCase();
+  const tituloEmprestado =
+    (
+      emprestimo.tituloLivro ||
+      emprestimo.livroTitulo ||
+      emprestimo.livro?.titulo ||
+      ''
+    )
+      .trim()
+      .toLowerCase();
 
-              return (
-                String(
-                  emprestimoLivroId
-                ) === String(id) &&
-                statusEmprestimo ===
-                  'ATIVO'
-              );
-            }
-          );
+  const tituloAtual =
+    (
+      livroCarregado.titulo ||
+      livroCarregado.nome ||
+      ''
+    )
+      .trim()
+      .toLowerCase();
+
+  const statusEmprestimo =
+    emprestimo.status?.toUpperCase();
+
+  return (
+    tituloEmprestado === tituloAtual &&
+    statusEmprestimo === 'ATIVO'
+  );
+});
 
         setEmprestadoPorMim(
           livroEstaComigo
