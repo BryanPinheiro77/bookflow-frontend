@@ -40,8 +40,22 @@ type Interesse = {
 export default function HomeScreen() {
   const [livros, setLivros] = useState<Livro[]>([]);
   const [interessesIds, setInteressesIds] = useState<number[]>([]);
-  const [role, setRole] = useState<string | null>(null);
-  const [carregando, setCarregando] = useState(true);
+
+  const [meusEmprestimos, setMeusEmprestimos] =
+    useState(0);
+
+  const [
+    totalEmprestimosAtivos,
+    setTotalEmprestimosAtivos,
+  ] = useState(0);
+
+  const [role, setRole] = useState<string | null>(
+    null
+  );
+
+  const [carregando, setCarregando] =
+    useState(true);
+
   const [erro, setErro] = useState('');
 
   const isAdmin = role === 'ADMIN';
@@ -56,7 +70,24 @@ export default function HomeScreen() {
       setRole(roleSalva);
 
       const data = await apiFetch('/livros');
+
       setLivros(data);
+
+      if (roleSalva === 'ADMIN') {
+
+        const emprestimos =
+          await apiFetch('/emprestimos');
+
+        const ativos = emprestimos.filter(
+          (emprestimo: any) =>
+            emprestimo.status?.toUpperCase() ===
+            'ATIVO'
+        );
+
+        setTotalEmprestimosAtivos(
+          ativos.length
+        );
+      }
 
       if (roleSalva === 'USUARIO') {
         try {
@@ -75,12 +106,27 @@ export default function HomeScreen() {
             );
 
           setInteressesIds(ids);
+
+          const emprestimos =
+            await apiFetch('/emprestimos/me');
+
+          const ativos = emprestimos.filter(
+            (emprestimo: any) =>
+              emprestimo.status?.toUpperCase() ===
+              'ATIVO'
+          );
+
+          setMeusEmprestimos(ativos.length);
+
         } catch {
           setInteressesIds([]);
+          setMeusEmprestimos(0);
         }
       } else {
         setInteressesIds([]);
+        setMeusEmprestimos(0);
       }
+
     } catch {
       setErro(
         'Não foi possível carregar os dados da Home.'
@@ -129,8 +175,9 @@ export default function HomeScreen() {
     0
   );
 
-  const livrosEmprestados =
-    totalLivros - livrosDisponiveis;
+  const livrosEmprestados = isUsuario
+    ? meusEmprestimos
+    : totalEmprestimosAtivos;
 
   const livrosRecentes = livros.slice(0, 4);
 
@@ -198,7 +245,9 @@ export default function HomeScreen() {
           </Text>
 
           <Text style={styles.summaryLabel}>
-            Emprestados
+            {isUsuario
+              ? 'Meus empréstimos'
+              : 'Emprestados'}
           </Text>
         </View>
       </View>
