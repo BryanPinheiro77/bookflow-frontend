@@ -22,6 +22,7 @@ type Livro = {
   status?: string;
   capaUrl?: string;
   adminId?: number;
+  adminNome?: string;
 
   quantidadeTotal?: number;
   quantidadeDisponivel?: number;
@@ -482,6 +483,14 @@ export default function DetalhesLivroScreen() {
                 {livro.autor ||
                   'Autor não informado'}
               </Text>
+
+              <View style={styles.infoBlock}>
+                <Text style={styles.label}>Biblioteca</Text>
+
+                  <Text style={styles.value}>
+                  {livro.adminNome || 'Não informada'}
+                </Text>
+              </View>
 
               <View
                 style={styles.infoBlock}

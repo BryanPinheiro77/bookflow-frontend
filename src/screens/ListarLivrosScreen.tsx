@@ -20,6 +20,7 @@ type Livro = {
   status?: string;
   capaUrl?: string;
   adminId?: number;
+  adminNome?: string;
 
   quantidadeTotal?: number;
   quantidadeDisponivel?: number;
@@ -269,6 +270,10 @@ export default function LivrosScreen() {
                     'Autor não informado'}
                 </Text>
 
+                <Text style={styles.bookLibrary}>
+                  Biblioteca: {livro.adminNome || 'Não informada'}
+                </Text>
+
                 {livro.categoria ? (
                   <Text
                     style={
@@ -418,6 +423,13 @@ const styles = StyleSheet.create({
 
   placeholderRight: {
     width: 42,
+  },
+
+  bookLibrary: {
+  color: '#2563eb',
+  fontSize: 12,
+  fontWeight: '700',
+  marginBottom: 8,
   },
 
   createButton: {
