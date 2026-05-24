@@ -76,17 +76,26 @@ export default function EmprestimosScreen() {
     }
   }
 
-  async function devolverLivro(id: number) {
-    try {
-      await apiFetch(`/emprestimos/${id}/devolver`, {
-        method: 'PATCH',
-      });
+async function devolverLivro(id: number) {
+  try {
+    setErro('');
 
-      carregarEmprestimos();
-    } catch {
-      setErro('Não foi possível devolver o livro.');
-    }
+    await apiFetch(`/emprestimos/${id}/devolver`, {
+      method: 'PUT',
+    });
+
+    await carregarEmprestimos();
+  } catch (error) {
+    const mensagemErro =
+      error instanceof Error
+        ? error.message
+        : 'Não foi possível devolver o livro.';
+
+    console.log('Erro ao devolver:', mensagemErro);
+
+    setErro(mensagemErro);
   }
+}
 
   useEffect(() => {
     carregarEmprestimos();

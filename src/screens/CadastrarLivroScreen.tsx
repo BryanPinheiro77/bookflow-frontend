@@ -9,7 +9,12 @@ import {
   ScrollView,
 } from 'react-native';
 import { router } from 'expo-router';
-import { apiFetch } from '../services/api';
+import * as ImagePicker from 'expo-image-picker';
+import { apiFetch, apiUpload } from '../services/api';
+
+type LivroCriadoResponse = {
+  id: number;
+};
 
 export default function CadastrarLivroScreen() {
   const [titulo, setTitulo] = useState('');
@@ -22,8 +27,34 @@ export default function CadastrarLivroScreen() {
   const [valorEmprestimo, setValorEmprestimo] = useState('');
   const [valorMultaDiaria, setValorMultaDiaria] = useState('');
 
+  const [imagemCapa, setImagemCapa] = useState<string | null>(null);
+
   const [carregando, setCarregando] = useState(false);
   const [mensagem, setMensagem] = useState('');
+
+  async function escolherImagem() {
+    const resultado = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.8,
+    });
+
+    if (!resultado.canceled) {
+      setImagemCapa(resultado.assets[0].uri);
+    }
+  }
+
+  async function enviarCapa(livroId: number, imagemUri: string) {
+    const formData = new FormData();
+
+    formData.append('file', {
+      uri: imagemUri,
+      name: 'capa.jpg',
+      type: 'image/jpeg',
+    } as any);
+
+    await apiUpload(`/livros/${livroId}/capa`, formData);
+  }
 
   async function cadastrarLivro() {
     setMensagem('');
@@ -45,30 +76,30 @@ export default function CadastrarLivroScreen() {
     const quantidadeDisponivelNumero = Number(quantidadeDisponivel);
 
     if (quantidadeDisponivelNumero > quantidadeTotalNumero) {
-      setMensagem(
-        'Quantidade disponível não pode ser maior que a total.'
-      );
-
+      setMensagem('Quantidade disponível não pode ser maior que a total.');
       return;
     }
 
     try {
       setCarregando(true);
 
-      await apiFetch('/livros', {
+      const livroCriado: LivroCriadoResponse = await apiFetch('/livros', {
         method: 'POST',
         body: JSON.stringify({
           titulo: titulo.trim(),
           autor: autor.trim(),
           categoria: categoria.trim(),
-
           quantidadeTotal: quantidadeTotalNumero,
           quantidadeDisponivel: quantidadeDisponivelNumero,
-
           valorEmprestimo: Number(valorEmprestimo),
           valorMultaDiaria: Number(valorMultaDiaria),
+          capaUrl: null,
         }),
       });
+
+      if (imagemCapa) {
+        await enviarCapa(livroCriado.id, imagemCapa);
+      }
 
       router.replace('/livros' as any);
     } catch (error) {
@@ -84,10 +115,7 @@ export default function CadastrarLivroScreen() {
   }
 
   return (
-    <ScrollView
-      style={styles.page}
-      contentContainerStyle={styles.content}
-    >
+    <ScrollView style={styles.page} contentContainerStyle={styles.content}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()}>
           <Text style={styles.backText}>Voltar</Text>
@@ -173,26 +201,27 @@ export default function CadastrarLivroScreen() {
           keyboardType="numeric"
         />
 
-        {mensagem ? (
-          <Text style={styles.message}>
-            {mensagem}
+        <Pressable style={styles.secondaryButton} onPress={escolherImagem}>
+          <Text style={styles.secondaryButtonText}>
+            {imagemCapa ? 'Trocar capa selecionada' : 'Selecionar capa'}
           </Text>
+        </Pressable>
+
+        {imagemCapa ? (
+          <Text style={styles.selectedImageText}>Capa selecionada</Text>
         ) : null}
 
+        {mensagem ? <Text style={styles.message}>{mensagem}</Text> : null}
+
         <Pressable
-          style={[
-            styles.button,
-            carregando && styles.buttonDisabled,
-          ]}
+          style={[styles.button, carregando && styles.buttonDisabled]}
           onPress={cadastrarLivro}
           disabled={carregando}
         >
           {carregando ? (
             <ActivityIndicator color="#ffffff" />
           ) : (
-            <Text style={styles.buttonText}>
-              Cadastrar livro
-            </Text>
+            <Text style={styles.buttonText}>Cadastrar livro</Text>
           )}
         </Pressable>
       </View>
@@ -260,6 +289,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     marginBottom: 8,
     fontSize: 15,
+  },
+
+  secondaryButton: {
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#2563eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+    marginBottom: 10,
+  },
+
+  secondaryButtonText: {
+    color: '#2563eb',
+    fontWeight: 'bold',
+  },
+
+  selectedImageText: {
+    color: '#16a34a',
+    textAlign: 'center',
+    fontWeight: '600',
+    marginBottom: 8,
   },
 
   message: {

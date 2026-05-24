@@ -7,9 +7,11 @@ import {
   StyleSheet,
   ActivityIndicator,
   ScrollView,
+  Image,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { apiFetch } from '../services/api';
+import * as ImagePicker from 'expo-image-picker';
+import { apiFetch, apiUpload, API_BASE_URL } from '../services/api';
 
 type Livro = {
   id: number;
@@ -27,6 +29,18 @@ type Livro = {
   valorMultaDiaria?: number;
 };
 
+function getImageUrl(capaUrl?: string | null) {
+  if (!capaUrl) {
+    return null;
+  }
+
+  if (capaUrl.startsWith('http://') || capaUrl.startsWith('https://')) {
+    return capaUrl;
+  }
+
+  return `${API_BASE_URL}${capaUrl}`;
+}
+
 export default function EditarLivroScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
 
@@ -39,6 +53,9 @@ export default function EditarLivroScreen() {
 
   const [valorEmprestimo, setValorEmprestimo] = useState('');
   const [valorMultaDiaria, setValorMultaDiaria] = useState('');
+
+  const [capaUrl, setCapaUrl] = useState<string | null>(null);
+  const [imagemCapa, setImagemCapa] = useState<string | null>(null);
 
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -61,21 +78,14 @@ export default function EditarLivroScreen() {
       setAutor(livro.autor || '');
       setCategoria(livro.categoria || '');
 
-      setQuantidadeTotal(
-        livro.quantidadeTotal?.toString() || ''
-      );
+      setQuantidadeTotal(livro.quantidadeTotal?.toString() || '');
+      setQuantidadeDisponivel(livro.quantidadeDisponivel?.toString() || '');
 
-      setQuantidadeDisponivel(
-        livro.quantidadeDisponivel?.toString() || ''
-      );
+      setValorEmprestimo(livro.valorEmprestimo?.toString() || '');
+      setValorMultaDiaria(livro.valorMultaDiaria?.toString() || '');
 
-      setValorEmprestimo(
-        livro.valorEmprestimo?.toString() || ''
-      );
-
-      setValorMultaDiaria(
-        livro.valorMultaDiaria?.toString() || ''
-      );
+      setCapaUrl(livro.capaUrl || null);
+      setImagemCapa(null);
     } catch (error) {
       const mensagemErro =
         error instanceof Error
@@ -85,6 +95,57 @@ export default function EditarLivroScreen() {
       setMensagem(mensagemErro);
     } finally {
       setCarregando(false);
+    }
+  }
+
+  async function escolherImagem() {
+    const resultado = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.8,
+    });
+
+    if (!resultado.canceled) {
+      setImagemCapa(resultado.assets[0].uri);
+      setMensagem('');
+    }
+  }
+
+  async function enviarCapa(livroId: number, imagemUri: string) {
+    const formData = new FormData();
+
+    formData.append('file', {
+      uri: imagemUri,
+      name: 'capa.jpg',
+      type: 'image/jpeg',
+    } as any);
+
+    await apiUpload(`/livros/${livroId}/capa`, formData);
+  }
+
+  async function removerCapa() {
+    if (!id) return;
+
+    try {
+      setSalvando(true);
+      setMensagem('');
+
+      const livroAtualizado: Livro = await apiFetch(`/livros/${id}/capa`, {
+        method: 'DELETE',
+      });
+
+      setCapaUrl(livroAtualizado.capaUrl || null);
+      setImagemCapa(null);
+      setMensagem('Capa removida com sucesso.');
+    } catch (error) {
+      const mensagemErro =
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível remover a capa.';
+
+      setMensagem(mensagemErro);
+    } finally {
+      setSalvando(false);
     }
   }
 
@@ -108,10 +169,7 @@ export default function EditarLivroScreen() {
     const quantidadeDisponivelNumero = Number(quantidadeDisponivel);
 
     if (quantidadeDisponivelNumero > quantidadeTotalNumero) {
-      setMensagem(
-        'Quantidade disponível não pode ser maior que a total.'
-      );
-
+      setMensagem('Quantidade disponível não pode ser maior que a total.');
       return;
     }
 
@@ -130,8 +188,14 @@ export default function EditarLivroScreen() {
 
           valorEmprestimo: Number(valorEmprestimo),
           valorMultaDiaria: Number(valorMultaDiaria),
+
+          capaUrl,
         }),
       });
+
+      if (id && imagemCapa) {
+        await enviarCapa(Number(id), imagemCapa);
+      }
 
       router.replace('/livros' as any);
     } catch (error) {
@@ -150,35 +214,58 @@ export default function EditarLivroScreen() {
     carregarLivro();
   }, []);
 
+  const imageUrl = imagemCapa || getImageUrl(capaUrl);
+
   if (carregando) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator />
-        <Text style={styles.loadingText}>
-          Carregando livro...
-        </Text>
+        <Text style={styles.loadingText}>Carregando livro...</Text>
       </View>
     );
   }
 
   return (
-    <ScrollView
-      style={styles.page}
-      contentContainerStyle={styles.content}
-    >
+    <ScrollView style={styles.page} contentContainerStyle={styles.content}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()}>
           <Text style={styles.backText}>Voltar</Text>
         </Pressable>
 
-        <Text style={styles.headerTitle}>
-          Editar Livro
-        </Text>
+        <Text style={styles.headerTitle}>Editar Livro</Text>
 
         <View style={styles.placeholderRight} />
       </View>
 
       <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Capa do livro</Text>
+
+        <View style={styles.coverArea}>
+          {imageUrl ? (
+            <Image
+              source={{ uri: imageUrl }}
+              style={styles.coverImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.coverPlaceholder}>
+              <Text style={styles.coverPlaceholderText}>Sem capa</Text>
+            </View>
+          )}
+        </View>
+
+        <Pressable style={styles.secondaryButton} onPress={escolherImagem}>
+          <Text style={styles.secondaryButtonText}>
+            {imageUrl ? 'Trocar capa' : 'Selecionar capa'}
+          </Text>
+        </Pressable>
+
+        {imageUrl ? (
+          <Pressable style={styles.removeCoverButton} onPress={removerCapa}>
+            <Text style={styles.removeCoverButtonText}>Remover capa</Text>
+          </Pressable>
+        ) : null}
+
         <Text style={styles.label}>Título</Text>
 
         <TextInput
@@ -253,26 +340,17 @@ export default function EditarLivroScreen() {
           keyboardType="numeric"
         />
 
-        {mensagem ? (
-          <Text style={styles.message}>
-            {mensagem}
-          </Text>
-        ) : null}
+        {mensagem ? <Text style={styles.message}>{mensagem}</Text> : null}
 
         <Pressable
-          style={[
-            styles.button,
-            salvando && styles.buttonDisabled,
-          ]}
+          style={[styles.button, salvando && styles.buttonDisabled]}
           onPress={salvarAlteracoes}
           disabled={salvando}
         >
           {salvando ? (
             <ActivityIndicator color="#ffffff" />
           ) : (
-            <Text style={styles.buttonText}>
-              Salvar alterações
-            </Text>
+            <Text style={styles.buttonText}>Salvar alterações</Text>
           )}
         </Pressable>
       </View>
@@ -318,6 +396,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
+sectionTitle: {
+  color: '#111827',
+  fontSize: 16,
+  fontWeight: 'bold',
+  marginBottom: 10,
+},
+
   headerTitle: {
     color: '#ffffff',
     fontSize: 20,
@@ -336,6 +421,33 @@ const styles = StyleSheet.create({
     borderColor: '#e5e7eb',
   },
 
+  coverArea: {
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 12,
+  },
+
+  coverImage: {
+    width: 140,
+    height: 200,
+    borderRadius: 14,
+    backgroundColor: '#e5e7eb',
+  },
+
+  coverPlaceholder: {
+    width: 140,
+    height: 200,
+    borderRadius: 14,
+    backgroundColor: '#e5e7eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  coverPlaceholderText: {
+    color: '#6b7280',
+    fontWeight: '600',
+  },
+
   label: {
     color: '#374151',
     fontWeight: '600',
@@ -352,6 +464,39 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     marginBottom: 8,
     fontSize: 15,
+  },
+
+  secondaryButton: {
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#2563eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+    marginBottom: 10,
+  },
+
+  secondaryButtonText: {
+    color: '#2563eb',
+    fontWeight: 'bold',
+  },
+
+  removeCoverButton: {
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#dc2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+
+  removeCoverButtonText: {
+    color: '#dc2626',
+    fontWeight: 'bold',
   },
 
   message: {

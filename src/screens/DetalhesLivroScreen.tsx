@@ -675,6 +675,46 @@ export default function DetalhesLivroScreen() {
                 ) : null}
               </>
             )}
+        {isAdmin && (
+          <>
+            <Pressable
+              style={styles.primaryButton}
+              onPress={() =>
+                router.push({
+                  pathname: '/editar-livro',
+                  params: { id: livro.id },
+                } as any)
+              }
+            >
+              <Text style={styles.primaryButtonText}>
+                Editar livro
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.deleteButton}
+              onPress={confirmarExclusao}
+            >
+              <Text style={styles.deleteButtonText}>
+                Excluir livro
+              </Text>
+            </Pressable>
+
+            {mensagem ? (
+              <Text
+                style={[
+                  styles.inlineMessage,
+                  mensagem.toLowerCase().includes('não') ||
+                  mensagem.toLowerCase().includes('erro')
+                    ? styles.inlineError
+                    : styles.inlineSuccess,
+                ]}
+              >
+                {mensagem}
+              </Text>
+            ) : null}
+          </>
+        )}
           </>
         )}
     </ScrollView>
@@ -701,6 +741,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+
+deleteButton: {
+  height: 48,
+  backgroundColor: '#fef2f2',
+  borderWidth: 1,
+  borderColor: '#dc2626',
+  borderRadius: 12,
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginBottom: 12,
+},
+
+deleteButtonText: {
+  color: '#dc2626',
+  fontWeight: 'bold',
+  fontSize: 16,
+},
 
   backText: {
     color: '#d1d5db',
